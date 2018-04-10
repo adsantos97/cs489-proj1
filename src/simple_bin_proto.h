@@ -5,7 +5,7 @@ typedef enum
 {
     MD5_RECORD,
     MACHINE_RECORD,
-    MD5_RECORD_TEXT
+    TEXT_SIZE_RECORD    
 } EntryType;
 
 typedef struct
@@ -26,6 +26,10 @@ typedef struct
     uint8_t md5[MD5_DIGEST_LENGTH];
 } MD5Record;
 
-
+typedef struct
+{
+    EntryType et;
+    Elf32_Word text_size;
+} TextSizeRecord;
 
 #endif // SIMPLE_BIN_PROTO_H

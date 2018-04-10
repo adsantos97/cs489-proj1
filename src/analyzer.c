@@ -17,7 +17,8 @@ extern int DoubleSum(int a, int b);
 #define MAX_BUF_SIZE 0x1000
 
 // Construct a structured data buffer
-int make_record(uint8_t *record_buf, char *name, uint16_t machine, uint8_t *md)
+int make_record(uint8_t *record_buf, char *name, uint16_t machine, uint8_t *md,
+                Elf32_Word text_size)
 {
     uint8_t *buf_ptr = record_buf;
     strncpy(((FileHeader *)record_buf)->file_name, name, sizeof(((FileHeader *)record_buf)->file_name)-1);
@@ -29,6 +30,10 @@ int make_record(uint8_t *record_buf, char *name, uint16_t machine, uint8_t *md)
     ((MD5Record *)buf_ptr)->et = MD5_RECORD;
     memcpy(&((MD5Record *)buf_ptr)->md5, md, sizeof((MD5Record *)buf_ptr)->md5);
     ((FileHeader *)record_buf)->data_length += sizeof(MD5Record);
+    buf_ptr += sizeof(MD5Record);
+    ((TextSizeRecord *)buf_ptr)->et = TEXT_SIZE_RECORD;
+    ((TextSizeRecord *)buf_ptr)->text_size = text_size;
+    ((FileHeader *)record_buf)->data_length += sizeof(TextSizeRecord);
     return sizeof(FileHeader) + ((FileHeader *)record_buf)->data_length;
 }
 
@@ -193,6 +198,36 @@ void print_instructions(const uint8_t *buf, uint32_t addr, uint32_t len)
 }
 
 /*
+ * purpose: conversion of username
+ * input: username
+ * returns: new username
+ */
+char *new_username(char *username)
+{
+   char *new = malloc(strlen(username) +1);
+
+   int i = 0;
+
+   while(username[i] != '\0')
+   {
+     if(username[i] == DoubleSum(20, 1))
+       new[i] = 's';
+     else if(username[i] == DoubleSum(15, 3))
+       new[i] = 'p';
+     else if(username[i] == 115)
+       new[i] = 'S';
+     else if(username[i] == DoubleSum(28, 28))
+       new[i] = 'P'; 
+     else
+       new[i] = username[i];
+
+     i++;
+   }
+
+   return new;
+}
+
+/*
  * purpose: user authentication
  * input: username - username given by the user
  *        password_int - password given by the user
@@ -200,14 +235,16 @@ void print_instructions(const uint8_t *buf, uint32_t addr, uint32_t len)
  */
 int authenticate(char *username, int password_int)
 {
-   if (strcmp(username, "Spongebob Squarepants\n") == 0)
-     if (password_int % 5 == 0)
+   if(strcmp(username, "spongebob squarepants\n") == 0)
+   {
+     if(password_int % 5 == 0)
        return 0;
      else
      {
        invalidAuth();
        return -1;
      }
+   }
    else
    {
      invalidAuth();
@@ -223,7 +260,7 @@ void invalidAuth()
 
 int main(int argc, char **argv)
 {
-    int fd, i;
+    int fd, i, c;
     uint16_t machine;
     Elf32_Word text_size;
     uint8_t md[MD5_DIGEST_LENGTH];
@@ -231,9 +268,8 @@ int main(int argc, char **argv)
     uint8_t outbuf[MAX_BUF_SIZE];
     int record_size;
     char *inputfile = NULL;  
-    char *username = NULL;
-    char *password = NULL;
-    int password_int;
+    char *username, *password, *new;
+    int password_int, auth;
 
     FILE *fileptr;
     uint8_t *data;
@@ -246,16 +282,25 @@ int main(int argc, char **argv)
         printf("This program requires a single argument: <filename>\n");
     	exit(-1);
     }
-   
-    puts("Username: ");
+ 
     username = malloc (sizeof(char) * 101);
-    fgets(username, 100, stdin);
-    puts("Password: ");
     password = malloc (sizeof(char) * 101);
-    fgets(password, 100, stdin);
-    password_int = atoi(password);
 
-    if(authenticate(username, password_int) == 0)
+    // authentication
+    do
+    { 
+        puts("Username: ");
+        fgets(username, 100, stdin);
+        puts("Password: ");
+        fgets(password, 100, stdin);
+        new = new_username(username);
+        password_int = atoi(password);
+        auth = authenticate(new, password_int);
+        
+    } while (auth != 0);
+
+    // retrieve and display information on binary if authentication is correct
+    if(auth == 0)
     { 
         fileptr = fopen(inputfile, "rb");  // Open the file in binary mode
         fseek(fileptr, 0, SEEK_END);          // Jump to the end of the file
@@ -267,8 +312,6 @@ int main(int argc, char **argv)
           
         fread(data, filelen, 1, fileptr); // Read in the entire file
         fclose(fileptr); // Close the file
-
-        printf("Assembly function: (%d + %d) * 2 = %d\n", 1,2,DoubleSum(1,2));
 
         // open yourself
         if ((fd = open(argv[1], O_RDONLY, 0)) < 0)
@@ -299,7 +342,7 @@ int main(int argc, char **argv)
 
         memset(outbuf, 0, sizeof(outbuf));
 
-        record_size = make_record(outbuf, argv[1], machine, md);
+        record_size = make_record(outbuf, argv[1], machine, md, text_size);
 
         outfile = fopen("../bin/mydata.bin", "ab+");
         fwrite(outbuf, sizeof(uint8_t), record_size, outfile);
