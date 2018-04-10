@@ -301,7 +301,7 @@ int main(int argc, char **argv)
 
         record_size = make_record(outbuf, argv[1], machine, md);
 
-        outfile = fopen("mydata.bin", "ab+");
+        outfile = fopen("../bin/mydata.bin", "ab+");
         fwrite(outbuf, sizeof(uint8_t), record_size, outfile);
         fflush(outfile);
         fclose(outfile);
