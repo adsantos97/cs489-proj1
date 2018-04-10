@@ -110,7 +110,7 @@ uint16_t get_machine_type(int fd)
     {
         errx(EXIT_FAILURE, "ELF begin failed: %s\n", elf_errmsg(-1));
     }
-
+    
     // Get the header
     if (gelf_getehdr(e, &ehdr) == NULL)
     {
@@ -122,6 +122,35 @@ uint16_t get_machine_type(int fd)
     elf_end(e);
 
     return machine;
+}
+
+/* purpose: verify the format of the binary file before proceeding
+ * input: fd - file descriptor
+ * returns: nothing
+ */
+void verify_format(int fd)
+{
+    Elf *e;
+    GElf_Ehdr ehdr;
+    uint16_t machine;
+
+    // initialize libelf
+    if (elf_version(EV_CURRENT) == EV_NONE)
+    {
+        errx(EXIT_FAILURE, "ELF library init failure: %s\n", elf_errmsg(-1));
+    }
+
+    // Initialize the elf object
+    if ((e = elf_begin(fd, ELF_C_READ, NULL)) == NULL)
+    {
+        errx(EXIT_FAILURE, "ELF begin failed: %s\n", elf_errmsg(-1));
+    }
+    
+    // Get the header
+    if (gelf_getehdr(e, &ehdr) == NULL)
+    {
+        errx(EXIT_FAILURE, "getehdr failed: %s\n", elf_errmsg(-1));
+    }
 }
 
 /*
@@ -247,8 +276,9 @@ int main(int argc, char **argv)
 	    err(EXIT_FAILURE, "open %s failed\n", argv[1]);
         }
 
+        verify_format(fd);
         machine = get_machine_type(fd);
-            text_size = get_text_size(fd);
+        text_size = get_text_size(fd);
 
         if (!MD5(data, filesize, md))
         {
