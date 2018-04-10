@@ -1,0 +1,17 @@
+-Compile to 32-bit
+gcc -m32 -o <filename> <filename.c>
+
+-Check if you take text section corectly
+objcopy <filename> --dump.section .text=<filename.text>
+
+-Check if you got MD5 sum correctly
+md5sum <filename.text>
+
+-Read an ELF file using command line
+readelf <commands> <ELF Binary>
+    -h (headers)
+    -S (sections)
+    -x (hex dump)
+
+objdump -S <ELF Binary>
+
