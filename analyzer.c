@@ -13,9 +13,6 @@
 
 extern int DoubleSum(int a, int b);
 
-// Compile me: gcc proj1_example.c -o example -lelf -lcrypto -lcapstone
-// I'll drop a nice binary file on disk.
-
 #define DISASSEMBLE_START_ADDR 0x08048310
 #define MAX_BUF_SIZE 0x1000
 
@@ -35,7 +32,7 @@ int make_record(uint8_t *record_buf, char *name, uint16_t machine, uint8_t *md)
     return sizeof(FileHeader) + ((FileHeader *)record_buf)->data_length;
 }
 
-Elf32_Xword get_text_size(int fd)
+Elf32_Word get_text_size(int fd)
 {
     Elf *e;  // ELF
     Elf_Scn *scn;  // Section index struct
@@ -44,7 +41,7 @@ Elf32_Xword get_text_size(int fd)
     char *name;
     uint8_t *p;
     size_t shstrndx;
-    Elf32_Xword text_size;
+    Elf32_Word text_size;
 
     // initialize libelf
     if (elf_version(EV_CURRENT) == EV_NONE)
@@ -85,7 +82,7 @@ Elf32_Xword get_text_size(int fd)
     }
 
     printf("Size of .text section is 0x%06x\n", shdr.sh_size);
-    text_size = (Elf32_Xword)shdr.sh_size;
+    text_size = (Elf32_Word)shdr.sh_size;
     elf_end(e);
 
     return text_size;
@@ -127,6 +124,13 @@ uint16_t get_machine_type(int fd)
     return machine;
 }
 
+/*
+ * purpose: prints out the disassembly (i.e. disassembled binary file)
+ * input: buf - buffer
+ *        addr - start address
+ *        len - length of 
+ * returns: nothing - prints out disassembly
+ */
 void print_instructions(const uint8_t *buf, uint32_t addr, uint32_t len)
 {
     csh handle;
@@ -192,7 +196,7 @@ int main(int argc, char **argv)
 {
     int fd, i;
     uint16_t machine;
-    Elf32_Xword text_size;
+    Elf32_Word text_size;
     uint8_t md[MD5_DIGEST_LENGTH];
     FILE *outfile;
     uint8_t outbuf[MAX_BUF_SIZE];
@@ -224,54 +228,53 @@ int main(int argc, char **argv)
 
     if(authenticate(username, password_int) == 0)
     { 
+        fileptr = fopen(inputfile, "rb");  // Open the file in binary mode
+        fseek(fileptr, 0, SEEK_END);          // Jump to the end of the file
+        filelen = ftell(fileptr);             // Get the current byte offset in the file
+        rewind(fileptr);                      // Jump back to the beginning of the file
 
-	    fileptr = fopen(inputfile, "rb");  // Open the file in binary mode
-	    fseek(fileptr, 0, SEEK_END);          // Jump to the end of the file
-	    filelen = ftell(fileptr);             // Get the current byte offset in the file
-	    rewind(fileptr);                      // Jump back to the beginning of the file
+        filesize= (filelen+1)*sizeof(const uint8_t);
+        data = (uint8_t *)malloc(filesize); // Enough memory for file + \0
+          
+        fread(data, filelen, 1, fileptr); // Read in the entire file
+        fclose(fileptr); // Close the file
 
-	    filesize= (filelen+1)*sizeof(const uint8_t);
-	    data = (uint8_t *)malloc(filesize); // Enough memory for file + \0
-	      
-	    fread(data, filelen, 1, fileptr); // Read in the entire file
-	    fclose(fileptr); // Close the file
+        printf("Assembly function: (%d + %d) * 2 = %d\n", 1,2,DoubleSum(1,2));
 
-	    printf("Assembly function: (%d + %d) * 2 = %d\n", 1,2,DoubleSum(1,2));
+        // open yourself
+        if ((fd = open(argv[1], O_RDONLY, 0)) < 0)
+        {
+	    err(EXIT_FAILURE, "open %s failed\n", argv[1]);
+        }
 
-	    // open yourself
-	    if ((fd = open(argv[1], O_RDONLY, 0)) < 0)
-	    {
-		err(EXIT_FAILURE, "open %s failed\n", argv[1]);
-	    }
-
-	    machine = get_machine_type(fd);
+        machine = get_machine_type(fd);
             text_size = get_text_size(fd);
 
-	    if (!MD5(data, filesize, md))
-	    {
-		err(EXIT_FAILURE, "MD5 failed\n");
-	    }
+        if (!MD5(data, filesize, md))
+        {
+	    err(EXIT_FAILURE, "MD5 failed\n");
+        }
 
-	    printf("MD5: ");
+        printf("MD5: ");
 
-	    for (i = 0; i < MD5_DIGEST_LENGTH; i++)
-	    {
-		printf("%02x", md[i]);
-	    }
-	    printf("\n");
+        for (i = 0; i < MD5_DIGEST_LENGTH; i++)
+        {
+	    printf("%02x", md[i]);
+        }
+        printf("\n");
 
-	    //print_instructions(data, DISASSEMBLE_START_ADDR, filesize);
+        //print_instructions(data, DISASSEMBLE_START_ADDR, filesize);
 
-	    close(fd);
+        close(fd);
 
-	    memset(outbuf, 0, sizeof(outbuf));
+        memset(outbuf, 0, sizeof(outbuf));
 
-	    record_size = make_record(outbuf, argv[1], machine, md);
+        record_size = make_record(outbuf, argv[1], machine, md);
 
-	    outfile = fopen("mydata.bin", "ab+");
-	    fwrite(outbuf, sizeof(uint8_t), record_size, outfile);
-	    fflush(outfile);
-	    fclose(outfile);
+        outfile = fopen("mydata.bin", "ab+");
+        fwrite(outbuf, sizeof(uint8_t), record_size, outfile);
+        fflush(outfile);
+        fclose(outfile);
     }
 
     return EXIT_SUCCESS;
