@@ -26,16 +26,6 @@ typedef struct
     uint8_t md5[MD5_DIGEST_LENGTH];
 } MD5Record;
 
-typedef struct
-{
-    EntryType et;
-    uint8_t md5[MD5_DIGEST_LENGTH];
-} MD5RecordText;
 
-/*typedef struct
-{
-    EntryType et;
-    
-}*/
 
 #endif // SIMPLE_BIN_PROTO_H

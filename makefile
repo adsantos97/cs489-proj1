@@ -3,16 +3,16 @@ NASM=nasm -f elf32
 CFLAGS=-c -Wall
 LFLAGS=-lelf -lcrypto -lcapstone
 
-all: example
+all: analyze
 
-example: proj1_example_file.o doubleSum.o
-	$(CC) doubleSum.o proj1_example_file.o -o example $(LFLAGS)
-
-proj1_example_file.o: proj1_example_file.c proj1_example_file.h
-	$(CC) $(CFLAGS) proj1_example_file.c
+analyze: analyzer.o doubleSum.o
+	$(CC) doubleSum.o analyzer.o -o analyze $(LFLAGS)
 
 doubleSum.o: doubleSum.asm
 	$(NASM) doubleSum.asm
 
+analyzer.o: analyzer.c analyzer.h
+	$(CC) $(CFLAGS) analyzer.c
+
 .PHONY clean:
-	rm *o example mydata.bin
+	rm *o analyze mydata.bin
