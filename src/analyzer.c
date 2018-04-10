@@ -21,7 +21,7 @@ extern int DoubleSum(int a, int b);
 
 // Construct a structured data buffer
 int make_record(uint8_t *record_buf, char *name, uint16_t machine, uint8_t *md,
-                Elf32_Word text_size)
+                Elf32_Word text_size, Elf32_Half num_sections)
 {
     uint8_t *buf_ptr = record_buf;
     strncpy(((FileHeader *)record_buf)->file_name, name, sizeof(((FileHeader *)record_buf)->file_name)-1);
@@ -37,6 +37,10 @@ int make_record(uint8_t *record_buf, char *name, uint16_t machine, uint8_t *md,
     ((TextSizeRecord *)buf_ptr)->et = TEXT_SIZE_RECORD;
     ((TextSizeRecord *)buf_ptr)->text_size = text_size;
     ((FileHeader *)record_buf)->data_length += sizeof(TextSizeRecord);
+    buf_ptr += sizeof(TextSizeRecord);
+    ((NumSectionsRecord *)buf_ptr)->et = NUM_SECTS_RECORD;
+    ((NumSectionsRecord *)buf_ptr)->num_sections = num_sections;
+    ((FileHeader *)record_buf)->data_length += sizeof(NumSectionsRecord);
     return sizeof(FileHeader) + ((FileHeader *)record_buf)->data_length;
 }
 
@@ -99,6 +103,48 @@ Elf32_Word get_text_size(int fd)
     elf_end(e);
 
     return text_size;
+}
+
+/*
+ * purpose: get the number of section headers of the file
+ * input: fd - file descriptor
+ * return: number of section headers
+ */
+Elf32_Half get_num_sections(int fd)
+{
+    Elf *e;
+    GElf_Ehdr ehdr;
+    Elf32_Half num_sections;
+    size_t n;
+
+    // initialize libelf
+    if (elf_version(EV_CURRENT) == EV_NONE)
+    {
+        errx(EXIT_FAILURE, "ELF library init failure: %s\n", elf_errmsg(-1));
+    }
+
+    // Initialize the elf object
+    if ((e = elf_begin(fd, ELF_C_READ, NULL)) == NULL)
+    {
+        errx(EXIT_FAILURE, "ELF begin failed: %s\n", elf_errmsg(-1));
+    }
+    
+    // Get the header
+    if (gelf_getehdr(e, &ehdr) == NULL)
+    {
+        errx(EXIT_FAILURE, "getehdr failed: %s\n", elf_errmsg(-1));
+    }
+
+    if (elf_getshdrnum (e, &n) != 0)
+    {
+        errx(EXIT_FAILURE, "getshdrnum() failed: %s.", elf_errmsg(-1));
+    }
+
+    printf("Number of section headers: %hu\n", n);
+    num_sections = (Elf32_Half)n;
+    elf_end(e);
+
+    return num_sections;
 }
 
 /*
@@ -319,6 +365,7 @@ int main(int argc, char **argv)
     int fd, i;
     uint16_t machine;
     Elf32_Word text_size;
+    Elf32_Half num_sections;
     uint8_t md[MD5_DIGEST_LENGTH];
     FILE *outfile;
     uint8_t outbuf[MAX_BUF_SIZE];
@@ -389,6 +436,7 @@ int main(int argc, char **argv)
 
         verify_format(fd);
         machine = get_machine_type(fd);
+        num_sections = get_num_sections(fd);
         text_size = get_text_size(fd);
 
         if (!MD5(data, filesize, md))
@@ -396,7 +444,7 @@ int main(int argc, char **argv)
 	    err(EXIT_FAILURE, "MD5 failed\n");
         }
 
-        printf("MD5: ");
+        printf("MD5 of entire file: ");
 
         for (i = 0; i < MD5_DIGEST_LENGTH; i++)
         {
@@ -410,7 +458,7 @@ int main(int argc, char **argv)
 
         memset(outbuf, 0, sizeof(outbuf));
 
-        record_size = make_record(outbuf, argv[1], machine, md, text_size);
+        record_size = make_record(outbuf, argv[1], machine, md, text_size, num_sections);
 
         outfile = fopen("../bin/mydata.bin", "ab+");
         fwrite(outbuf, sizeof(uint8_t), record_size, outfile);

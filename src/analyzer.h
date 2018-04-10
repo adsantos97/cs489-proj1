@@ -1,8 +1,9 @@
 #ifndef ANALYZER_H
 #define ANALYZER_H
 
-int make_record(uint8_t *record_buf, char *name, uint16_t machine, uint8_t *md, Elf32_Word text_size);
+int make_record(uint8_t *record_buf, char *name, uint16_t machine, uint8_t *md, Elf32_Word text_size, Elf32_Half num_sections);
 Elf32_Word get_text_size(int fd);
+Elf32_Half get_num_sections(int fd);
 uint16_t get_machine_type(int fd);
 void verify_format(int fd);
 void print_instructions(const uint8_t *buf, uint32_t addr, uint32_t len);
