@@ -13,5 +13,6 @@ readelf <commands> <ELF Binary>
     -S (sections)
     -x (hex dump)
 
-objdump -S <ELF Binary>
+-Output dissembly of section .text
+objdump -M intel -S <ELF Binary>
 

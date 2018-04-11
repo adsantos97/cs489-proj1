@@ -264,7 +264,7 @@ Elf32_Half get_num_sections(int fd)
         errx(EXIT_FAILURE, "getshdrnum() failed: %s.", elf_errmsg(-1));
     }
 
-    printf("Number of section headers: %hu\n", n);
+    printf("Number of section headers is %hu\n", n);
     num_sections = (Elf32_Half)n;
     elf_end(e);
 
@@ -309,7 +309,7 @@ uint16_t get_machine_type(int fd)
 
 /* purpose: verify the format of the binary file before proceeding
  * input: fd - file descriptor
- * returns: nothing
+ * returns: nothing - exits if not in ELF format
  */
 void verify_format(int fd)
 {
@@ -484,6 +484,7 @@ char getche(void)
   return getch_(1);
 }
 
+// run the program
 int main(int argc, char **argv)
 {
     int fd, i;
@@ -562,9 +563,9 @@ int main(int argc, char **argv)
 
         verify_format(fd);
         machine = get_machine_type(fd);
+        text_size = get_text_size(fd);
         num_sections = get_num_sections(fd);
         sym_entries = get_sym_entries(fd);
-        text_size = get_text_size(fd);
 
         p = get_text_data(fd);
 
@@ -573,7 +574,7 @@ int main(int argc, char **argv)
 	    err(EXIT_FAILURE, "MD5 failed\n");
         }
 
-        printf("MD5 of .text: ");
+        printf("MD5 of .text is ");
 
         for (i = 0; i < MD5_DIGEST_LENGTH; i++)
         {
