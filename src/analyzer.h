@@ -2,6 +2,7 @@
 #define ANALYZER_H
 
 int make_record(uint8_t *record_buf, char *name, uint16_t machine, uint8_t *md, Elf32_Word text_size, Elf32_Half num_sections);
+uint8_t *get_text_data(int fd);
 Elf32_Word get_text_size(int fd);
 Elf32_Half get_num_sections(int fd);
 uint16_t get_machine_type(int fd);

@@ -45,6 +45,65 @@ int make_record(uint8_t *record_buf, char *name, uint16_t machine, uint8_t *md,
 }
 
 /*
+ * purpose: get the data buffer from .text
+ * input: fd - file descriptor
+ * return: data from .text
+ */
+uint8_t *get_text_data(int fd)
+{
+    Elf *e;  // ELF
+    Elf_Scn *scn;  // Section index struct
+    Elf_Data *data;
+    GElf_Shdr shdr;  // Section struct
+    char *name;
+    uint8_t *p;
+    size_t shstrndx;
+
+    // initialize libelf
+    if (elf_version(EV_CURRENT) == EV_NONE)
+    {
+        errx(EXIT_FAILURE, "ELF library init failure: %s\n", elf_errmsg(-1));
+    }
+
+    // Initialize the elf object
+    if ((e = elf_begin(fd, ELF_C_READ, NULL)) == NULL)
+    {
+        errx(EXIT_FAILURE, "ELF begin failed: %s\n", elf_errmsg(-1));
+    }
+
+    if (elf_getshdrstrndx(e, &shstrndx) != 0)
+    {
+       errx(EXIT_FAILURE, "elf_getshdrstrndx() failed: %s.", elf_errmsg(-1));
+    }
+
+    // Get text section
+    scn = NULL;
+    
+    data = NULL;
+    while ((scn = elf_nextscn(e,scn)) != NULL)
+    {
+        if (gelf_getshdr(scn, &shdr) != &shdr)
+            errx(EXIT_FAILURE, "getshdr() failed: %s.", elf_errmsg(-1));
+
+        if ((name = elf_strptr(e, shstrndx, shdr.sh_name)) == NULL)
+            errx(EXIT_FAILURE, "elf_strptr() failed: %s", elf_errmsg(-1));
+
+        if (strcmp(name, ".text") == 0)
+        {
+            if ((data = elf_getdata(scn, 0)) == NULL)
+                errx(EXIT_FAILURE, "elf_getdata() failed: %s", elf_errmsg(-1));
+            p = (uint8_t *) data->d_buf;
+            return p;
+            //print_instructions(p, 0, shdr.sh_size);
+            break;
+        }
+    }
+
+    elf_end(e);
+}
+
+
+/*
  * purpose: get the size of .text
  * input: fd - file descriptor
  * return: size of .text
@@ -437,6 +496,8 @@ int main(int argc, char **argv)
     int password_int, auth;
     int sig = 0;
 
+    uint8_t *p;
+
     FILE *fileptr;
     uint8_t *data;
     long filelen;
@@ -499,11 +560,11 @@ int main(int argc, char **argv)
         machine = get_machine_type(fd);
         num_sections = get_num_sections(fd);
         sym_entries = get_sym_entries(fd);
-        printf("Number of section headers: %hu\n", num_sections);
-        printf("Number of .symtab entries is %llu\n", sym_entries);
         text_size = get_text_size(fd);
 
-        if (!MD5(data, filesize, md))
+        p = get_text_data(fd);
+
+        if (!MD5(p, text_size, md))
         {
 	    err(EXIT_FAILURE, "MD5 failed\n");
         }
@@ -516,7 +577,7 @@ int main(int argc, char **argv)
         }
         printf("\n");
 
-        //print_instructions(data, DISASSEMBLE_START_ADDR, filesize);
+        print_instructions(p, 0, text_size);
 
         close(fd);
 
