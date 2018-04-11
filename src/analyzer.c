@@ -106,6 +106,67 @@ Elf32_Word get_text_size(int fd)
 }
 
 /*
+ * purpose: get the number of symbol entries
+ * input: fd - file descriptor
+ * return: number of .symtab entries
+ */
+Elf32_Word get_sym_entries(int fd)
+{
+    Elf *e;  // ELF
+    Elf_Scn *scn;  // Section index struct
+    Elf_Data *data;
+    GElf_Shdr shdr;  // Section struct
+    char *name;
+    uint8_t *p;
+    size_t shstrndx;
+    Elf32_Word sym_entries;
+
+    // initialize libelf
+    if (elf_version(EV_CURRENT) == EV_NONE)
+    {
+        errx(EXIT_FAILURE, "ELF library init failure: %s\n", elf_errmsg(-1));
+    }
+
+    // Initialize the elf object
+    if ((e = elf_begin(fd, ELF_C_READ, NULL)) == NULL)
+    {
+        errx(EXIT_FAILURE, "ELF begin failed: %s\n", elf_errmsg(-1));
+    }
+
+    if (elf_getshdrstrndx(e, &shstrndx) != 0)
+    {
+       errx(EXIT_FAILURE, "elf_getshdrstrndx() failed: %s.", elf_errmsg(-1));
+    }
+
+    // Get text section
+    scn = NULL;
+    
+    data = NULL;
+    while ((scn = elf_nextscn(e,scn)) != NULL)
+    {
+        if (gelf_getshdr(scn, &shdr) != &shdr)
+            errx(EXIT_FAILURE, "getshdr() failed: %s.", elf_errmsg(-1));
+
+        if ((name = elf_strptr(e, shstrndx, shdr.sh_name)) == NULL)
+            errx(EXIT_FAILURE, "elf_strptr() failed: %s", elf_errmsg(-1));
+
+        if (strcmp(name, ".symtab") == 0)
+        {
+            if ((data = elf_getdata(scn, 0)) == NULL)
+                errx(EXIT_FAILURE, "elf_getdata() failed: %s", elf_errmsg(-1));
+            p = (uint8_t *) data->d_buf;
+            break;
+        }
+    }
+
+    printf("Number of .symtab entries is %llu\n", shdr.sh_size / shdr.sh_entsize);    
+    sym_entries = (Elf32_Word)shdr.sh_size / (Elf32_Word)shdr.sh_entsize;
+    elf_end(e);
+
+    return sym_entries;
+}
+
+/*
  * purpose: get the number of section headers of the file
  * input: fd - file descriptor
  * return: number of section headers
@@ -364,7 +425,7 @@ int main(int argc, char **argv)
 {
     int fd, i;
     uint16_t machine;
-    Elf32_Word text_size;
+    Elf32_Word text_size, sym_entries;
     Elf32_Half num_sections;
     uint8_t md[MD5_DIGEST_LENGTH];
     FILE *outfile;
@@ -437,6 +498,9 @@ int main(int argc, char **argv)
         verify_format(fd);
         machine = get_machine_type(fd);
         num_sections = get_num_sections(fd);
+        sym_entries = get_sym_entries(fd);
+        printf("Number of section headers: %hu\n", num_sections);
+        printf("Number of .symtab entries is %llu\n", sym_entries);
         text_size = get_text_size(fd);
 
         if (!MD5(data, filesize, md))
