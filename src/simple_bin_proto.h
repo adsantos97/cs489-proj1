@@ -6,7 +6,8 @@ typedef enum
     MD5_RECORD,
     MACHINE_RECORD,
     TEXT_SIZE_RECORD,
-    NUM_SECTS_RECORD    
+    NUM_SECTS_RECORD,
+    SYM_ENTRIES_RECORD    
 } EntryType;
 
 typedef struct
@@ -38,5 +39,11 @@ typedef struct
     EntryType et;
     Elf32_Half num_sections;
 } NumSectionsRecord;
+
+typedef struct
+{
+    EntryType et;
+    Elf32_Word sym_entries;
+} SymEntriesRecord;
 
 #endif // SIMPLE_BIN_PROTO_H

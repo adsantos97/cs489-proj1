@@ -21,7 +21,7 @@ extern int DoubleSum(int a, int b);
 
 // Construct a structured data buffer
 int make_record(uint8_t *record_buf, char *name, uint16_t machine, uint8_t *md,
-                Elf32_Word text_size, Elf32_Half num_sections)
+                Elf32_Word text_size, Elf32_Half num_sections, Elf32_Word sym_entries)
 {
     uint8_t *buf_ptr = record_buf;
     strncpy(((FileHeader *)record_buf)->file_name, name, sizeof(((FileHeader *)record_buf)->file_name)-1);
@@ -41,6 +41,10 @@ int make_record(uint8_t *record_buf, char *name, uint16_t machine, uint8_t *md,
     ((NumSectionsRecord *)buf_ptr)->et = NUM_SECTS_RECORD;
     ((NumSectionsRecord *)buf_ptr)->num_sections = num_sections;
     ((FileHeader *)record_buf)->data_length += sizeof(NumSectionsRecord);
+    buf_ptr += sizeof(NumSectionsRecord);
+    ((SymEntriesRecord *)buf_ptr)->et = SYM_ENTRIES_RECORD;
+    ((SymEntriesRecord *)buf_ptr)->sym_entries = sym_entries;
+    ((FileHeader *)record_buf)->data_length += sizeof(SymEntriesRecord);
     return sizeof(FileHeader) + ((FileHeader *)record_buf)->data_length;
 }
 
@@ -569,7 +573,7 @@ int main(int argc, char **argv)
 	    err(EXIT_FAILURE, "MD5 failed\n");
         }
 
-        printf("MD5 of entire file: ");
+        printf("MD5 of .text: ");
 
         for (i = 0; i < MD5_DIGEST_LENGTH; i++)
         {
@@ -577,13 +581,14 @@ int main(int argc, char **argv)
         }
         printf("\n");
 
+        printf("Disassembly of .text of binary file:\n");
         print_instructions(p, 0, text_size);
 
         close(fd);
 
         memset(outbuf, 0, sizeof(outbuf));
 
-        record_size = make_record(outbuf, argv[1], machine, md, text_size, num_sections);
+        record_size = make_record(outbuf, argv[1], machine, md, text_size, num_sections, sym_entries);
 
         outfile = fopen("../bin/mydata.bin", "ab+");
         fwrite(outbuf, sizeof(uint8_t), record_size, outfile);
